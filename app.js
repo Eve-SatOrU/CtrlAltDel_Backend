@@ -24,24 +24,25 @@ app.use(
 app.use(cors());
 
 const routes = require('./routes/routes');
-const adminRoutes = require('./routes/admin');
 
 app.use('/api', routes);
-app.use('/api/admin', adminRoutes);
 
 
-
-const userController = require('./controllers/userController');
-const adminController = require('./controllers/adminController');
-
+// models
 const User = require('./models/user');
-const Admin = require('./models/admin');
+const AmbulanceRequest = require('./models/AmbulanceRequest');
+const Notification = require('./models/notification');
+
+// relation 
+AmbulanceRequest.belongsTo(User);
+User.hasMany(AmbulanceRequest);
+
+Notification.belongsTo(User);
+User.hasMany(Notification);
 
 
 
-
-
-const PORT = 3000 || process.env.PORT;
+const PORT = 3000|| process.env.PORT;
 
 sequelize.sync()
 .then(result => {

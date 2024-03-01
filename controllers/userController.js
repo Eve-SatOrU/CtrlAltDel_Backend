@@ -2,6 +2,9 @@ const bcrypt = require('bcrypt');
 const session = require('express-session');
 const { Op } = require('sequelize');
 const User = require('../models/user');
+const AmbulanceRequest = require('../models/AmbulanceRequest');
+const Notification = require('../models/notification');
+
 
 
 User.beforeCreate(async (user) => {
@@ -28,7 +31,7 @@ exports.getRegister = (req, res, next) => {
 };
 
 exports.postRegister = async (req, res, next) => {
-  const { userName, userPassword, email, birthday } = req.body;
+  const { firstName,lastName,userName,phoneNumber,Id_card, userPassword, email,role } = req.body;
 
   // Validate password strength
   if (!validateStrongPassword(userPassword)) {
@@ -42,7 +45,9 @@ exports.postRegister = async (req, res, next) => {
       where: {
         [Op.or]: [
           { userName },
-          { email }
+          { email },
+          {Id_card},
+          {phoneNumber}
         ]
       }
     });
@@ -51,13 +56,15 @@ exports.postRegister = async (req, res, next) => {
       return res.status(400).json({ error: 'Username or email is already taken.' });
     }
 
-    const hashedPassword = await bcrypt.hash(userPassword, 10);
-
     const user = await User.create({
+      firstName,
+      lastName,
       userName,
-      userPassword: hashedPassword,
+      phoneNumber,
+      Id_card,
+      userPassword,
       email,
-      birthday
+      role
     });
 
     res.status(201).json({ message: 'User registered successfully', user });
@@ -72,9 +79,9 @@ exports.getLogin = (req, res, next) => {
 };
 
 exports.postLogin = async (req, res) => {
-  const { userName, userPassword } = req.body;
+  const { email, userPassword } = req.body;
   try {
-    const user = await User.findOne({ where: { userName } });
+    const user = await User.findOne({ where: { email } });
     if (!user) {
       return res.status(400).json({ error: 'User not found' });
     }
@@ -101,3 +108,55 @@ exports.postLogout = async (req, res) => {
   });
 };
 
+// profile 
+exports.getProfile = async (req, res) => {
+  try {
+    const user = await User.findByPk(req.session.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.status(200).json({ user });
+  }catch (err) {
+    console.log(err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
+// delete account
+exports.deleteAccount = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const user = await User.findByPk(id);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const userRole = user.role;
+
+    const associations = [
+      {
+        model: AmbulanceRequest,
+        where: { userId: id },
+        required: userRole === 'civilprotection',
+      },
+      {
+        model: Notification,
+        where: { userId: id },
+        required: userRole === 'hospital',
+      },
+      {
+        model: Notification,
+        where: { userId: id },
+        required: userRole === 'police',
+      }
+    ];
+
+    await user.destroy({ include: associations });
+
+    res.status(200).json({ message: 'User and related data deleted successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
